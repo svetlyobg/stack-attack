@@ -3,3 +3,7 @@
 !.gitignore
 !index.html
 !stack-attack.html
+!README.md
+!docs/
+docs/*
+!docs/screenshot.png
