@@ -1,0 +1,5 @@
+# Only publish Stack Attack; other games in this folder stay local
+*
+!.gitignore
+!index.html
+!stack-attack.html
