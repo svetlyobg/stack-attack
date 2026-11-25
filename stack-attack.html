@@ -12,6 +12,9 @@
   h1 { margin:0; font-size:22px; letter-spacing:3px; color:#1c0f06; }
   #hud { display:flex; gap:22px; font-size:15px; font-variant-numeric:tabular-nums; }
   #hud b { color:#1c0f06; }
+  #hud { align-items:center; }
+  #langBtn { padding:2px 8px; font-size:13px; font-weight:700; border:2px solid #1c0f06; border-radius:6px; background:transparent; color:#1c0f06; }
+  #langBtn:hover { background:#1c0f06; color:#f5893f; }
   #wrap { position:relative; }
   html, body { touch-action:manipulation; overscroll-behavior:none; }
   canvas { background:#f5893f; border:5px solid #1c0f06; image-rendering:pixelated; display:block;
@@ -44,34 +47,91 @@
 <body>
 <h1>STACK ATTACK</h1>
 <div id="hud">
-  <div>Точки: <b id="score">0</b></div>
-  <div>Редове: <b id="lines">0</b></div>
-  <div>Рекорд: <b id="best">0</b></div>
+  <div><span data-i18n="score">Точки</span>: <b id="score">0</b></div>
+  <div><span data-i18n="lines">Редове</span>: <b id="lines">0</b></div>
+  <div><span data-i18n="best">Рекорд</span>: <b id="best">0</b></div>
+  <button id="langBtn" title="Language / Език">EN</button>
 </div>
 <div id="wrap">
   <canvas id="c" width="432" height="504"></canvas>
   <div id="overlay">
     <h2 id="ovTitle">STACK ATTACK</h2>
-    <p id="ovText">Кутии падат отгоре. Бутай ги встрани и подреждай пълни редове, за да изчезнат.<br>
-      Ако кутия падне върху теб или купчината стигне върха — край!<br><br>
-      <span class="kb"><b>← →</b> / A D — движение и бутане<br>
-      <b>↑</b> / W / интервал — скок (докато си във въздуха, натисни посока, за да стъпиш върху кутия)<br>
-      <b>P</b> — пауза</span>
-      <span class="touch"><b>◀ ▶</b> — движение и бутане<br>
-      <b>▲</b> — скок (после ◀ или ▶, за да стъпиш върху кутия)</span></p>
-    <button id="startBtn">Старт</button>
+    <p id="ovText"></p>
+    <button id="startBtn"></button>
   </div>
 </div>
 <div id="pad">
   <button id="bL">◀</button><button id="bR">▶</button><span class="gap"></span><button id="bU">▲</button>
 </div>
-<div class="hint">Подсказка: бутай кутия към дупка, за да допълниш ред. Скочи с ↑ и натисни посока, за да се качиш на кутия.</div>
+<div class="hint" data-i18n="hint"></div>
 
 <script>
 (() => {
   const COLS = 12, ROWS = 14, S = 36;
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
   const $ = id => document.getElementById(id);
+
+  // ---- translations ----
+  const T = {
+    bg: {
+      score: 'Точки', lines: 'Редове', best: 'Рекорд', switchTo: 'EN',
+      intro: 'Кутии падат отгоре. Бутай ги встрани и подреждай пълни редове, за да изчезнат.<br>' +
+             'Ако кутия падне върху теб или купчината стигне върха — край!<br><br>',
+      kb: '<b>← →</b> / A D — движение и бутане<br>' +
+          '<b>↑</b> / W / интервал — скок (докато си във въздуха, натисни посока, за да стъпиш върху кутия)<br>' +
+          '<b>P</b> — пауза',
+      touch: '<b>◀ ▶</b> — движение и бутане<br><b>▲</b> — скок (после ◀ или ▶, за да стъпиш върху кутия)',
+      start: 'Старт', newGame: 'Нова игра', resume: 'Продължи',
+      pause: 'Пауза', pauseText: 'Натисни P или Продължи.',
+      crushed: 'Премазан!', top: 'Купчината стигна върха!',
+      result: (s, l) => 'Резултат: <b>' + s + '</b> · Редове: <b>' + l + '</b>',
+      hint: 'Подсказка: бутай кутия към дупка, за да допълниш ред. Скочи с ↑ и натисни посока, за да се качиш на кутия.'
+    },
+    en: {
+      score: 'Score', lines: 'Lines', best: 'Best', switchTo: 'БГ',
+      intro: 'Boxes fall from above. Push them sideways and complete full rows to clear them.<br>' +
+             'If a box lands on you or the stack reaches the top — game over!<br><br>',
+      kb: '<b>← →</b> / A D — move and push<br>' +
+          '<b>↑</b> / W / Space — jump (while in the air, press a direction to step onto a box)<br>' +
+          '<b>P</b> — pause',
+      touch: '<b>◀ ▶</b> — move and push<br><b>▲</b> — jump (then ◀ or ▶ to step onto a box)',
+      start: 'Start', newGame: 'New game', resume: 'Resume',
+      pause: 'Paused', pauseText: 'Press P or Resume.',
+      crushed: 'Crushed!', top: 'The stack reached the top!',
+      result: (s, l) => 'Score: <b>' + s + '</b> · Lines: <b>' + l + '</b>',
+      hint: 'Tip: push a box into a gap to complete a row. Press ↑ to jump, then a direction to climb onto a box.'
+    }
+  };
+  let lang = localStorage.getItem('stackAttackLang') ||
+             ((navigator.language || '').toLowerCase().startsWith('bg') ? 'bg' : 'en');
+  let deathReason = 'crushed';
+  const t = k => T[lang][k];
+
+  function renderOverlay() {
+    const L = T[lang];
+    if (state === 'pause') {
+      $('ovTitle').textContent = L.pause; $('ovText').textContent = L.pauseText; $('startBtn').textContent = L.resume;
+    } else if (state === 'over') {
+      $('ovTitle').textContent = L[deathReason]; $('ovText').innerHTML = L.result(score, lines); $('startBtn').textContent = L.newGame;
+    } else {
+      $('ovTitle').textContent = 'STACK ATTACK';
+      $('ovText').innerHTML = L.intro + '<span class="kb">' + L.kb + '</span><span class="touch">' + L.touch + '</span>';
+      $('startBtn').textContent = L.start;
+    }
+  }
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    $('langBtn').textContent = t('switchTo');
+    renderOverlay();
+  }
+  $('langBtn').onclick = () => {
+    lang = lang === 'bg' ? 'en' : 'bg';
+    localStorage.setItem('stackAttackLang', lang);
+    applyLang();
+    $('langBtn').blur(); // keep Space for jumping
+  };
+
   const INK = '#1c0f06', ORANGE = '#f5893f';
   const COLORS = [INK, INK, INK, INK, INK]; // 5 box types (icons), monochrome LCD
   // dithered "sky" texture, precomputed once
@@ -145,13 +205,11 @@
     }
   }
 
-  function die(msg) {
-    state = 'over';
+  function die(reason) {
+    state = 'over'; deathReason = reason;
     if (score > best) { best = score; localStorage.setItem('stackAttackBest', best); }
     updateHud();
-    $('ovTitle').textContent = msg;
-    $('ovText').innerHTML = 'Резултат: <b>' + score + '</b> · Редове: <b>' + lines + '</b>';
-    $('startBtn').textContent = 'Нова игра';
+    renderOverlay();
     $('overlay').style.display = 'flex';
   }
 
@@ -218,24 +276,24 @@
       b.y += (b.fast ? 14 : speed) * dt;
       const r = Math.floor(b.y);
       // crushed?
-      if (b.c === player.c && b.y + 1 > player.r + .15 && b.y < player.r + .85) { return die('Премазан!'); }
+      if (b.c === player.c && b.y + 1 > player.r + .15 && b.y < player.r + .85) { return die('crushed'); }
       const below = r + 1;
       const blockedBy = below >= ROWS || (below >= 0 && grid[below][b.c]);
       // stop when another loose block lands directly under (handled by grid once it lands)
       if (blockedBy && b.y >= r) {
         b.y = r;
-        if (r < 0) { return die('Купчината стигна върха!'); }
-        if (grid[r][b.c]) { return die('Купчината стигна върха!'); }
-        if (player.c === b.c && player.r === r) { return die('Премазан!'); }
+        if (r < 0) { return die('top'); }
+        if (grid[r][b.c]) { return die('top'); }
+        if (player.c === b.c && player.r === r) { return die('crushed'); }
         grid[r][b.c] = b.color;
         loose.splice(i, 1);
-        if (r === 0) return die('Купчината стигна върха!');
+        if (r === 0) return die('top');
         score += 2;
         checkRows();
       }
     }
     // player standing in a cell that turned solid
-    if (grid[player.r][player.c]) return die('Премазан!');
+    if (grid[player.r][player.c]) return die('crushed');
     // smooth render pos
     const k = Math.min(1, dt * 22);
     player.dx += (player.c - player.dx) * k;
@@ -315,8 +373,7 @@
   function togglePause() {
     if (state === 'play') {
       state = 'pause';
-      $('ovTitle').textContent = 'Пауза'; $('ovText').textContent = 'Натисни P или Продължи.';
-      $('startBtn').textContent = 'Продължи'; $('overlay').style.display = 'flex';
+      renderOverlay(); $('overlay').style.display = 'flex';
     } else if (state === 'pause') { state = 'play'; $('overlay').style.display = 'none'; }
   }
   $('startBtn').onclick = () => { state === 'pause' ? togglePause() : start(); };
@@ -347,6 +404,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(); });
 
   reset(); state = 'menu';
+  applyLang();
   requestAnimationFrame(loop);
 })();
 </script>
